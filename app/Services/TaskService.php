@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 /**
@@ -43,14 +44,16 @@ class TaskService
      */
     public function getInboxTasks(User $user, array $filters = []): \Illuminate\Database\Eloquent\Collection
     {
-        $query = $user->tasks()
+        // Get the underlying query builder from the HasMany relation
+        $query = $user->tasks()->getQuery()
             ->where(function ($q) {
                 $q->whereNull('project_id')
-                  ->orWhere('project_id', 0);
-            })
-            ->with('project');
+                    ->orWhere('project_id', 0);
+            });
 
+        // Apply filters and eager loading
         $query = $this->applyFilters($query, $filters);
+        $query->with('project');
 
         return $query->orderBy('created_at', 'desc')->get();
     }
@@ -82,14 +85,14 @@ class TaskService
             ->where('priority', 'high')
             ->where(function ($q) use ($today) {
                 $q->whereDate('due_date', '>', $today)
-                  ->orWhereNull('due_date');
+                    ->orWhereNull('due_date');
             })
             ->with('project')
             ->orderBy('due_date')
             ->limit(10)
             ->get();
 
-return [
+        return [
             'dueToday' => $dueToday,
             'overdue' => $overdue,
             'highPriority' => $highPriority,
@@ -150,7 +153,7 @@ return [
     /**
      * Build filtered query with eager loading.
      */
-    protected function buildFilteredQuery(Builder $query, array $filters = []): Builder
+    protected function buildFilteredQuery(Builder|Relation $query, array $filters = []): Builder
     {
         $query->with('project');
 
@@ -160,7 +163,7 @@ return [
     /**
      * Apply filters to query.
      */
-    protected function applyFilters(Builder $query, array $filters = []): Builder
+    protected function applyFilters(Builder|Relation $query, array $filters = []): Builder
     {
         // Status filter
         if (isset($filters['status'])) {
